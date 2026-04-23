@@ -551,13 +551,16 @@ mod tests {
     fn test_invalid_max_members() {
         let env = Env::default();
         let creator = Address::generate(&env);
-        Group::new(1, creator, 10_000_000, 604800, 1, 2, 1234567890, 0);
+
+        Group::new(1, creator, 10_000_000, 604800, 1, 2, 1234567890);
     }
 
     #[test]
     fn test_is_complete() {
         let env = Env::default();
-        let mut group = make_group(&env, 3, 0);
+        let creator = Address::generate(&env);
+
+        let mut group = Group::new(1, creator, 10_000_000, 604800, 3, 2, 1234567890);
 
         assert!(!group.is_complete());
         group.current_cycle = 2;
@@ -595,7 +598,8 @@ mod tests {
         let env = Env::default();
         let mut group = make_group(&env, 2, 0);
         group.current_cycle = 2;
-        group.advance_cycle(&env);
+
+        group.advance_cycle(&env); // Should panic
     }
 
     #[test]
