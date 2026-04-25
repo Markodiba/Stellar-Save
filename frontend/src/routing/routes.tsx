@@ -120,4 +120,11 @@ export const routeConfig: RouteConfig[] = [
     protected: false,
     title: "Error - Stellar Save",
   },
+  {
+    path: ROUTES.LEADERBOARD,
+    component: LeaderboardPage,
+    protected: true,
+    title: "Leaderboard - Stellar Save",
+    description: "Top-performing groups and contributors",
+  },
 ];
