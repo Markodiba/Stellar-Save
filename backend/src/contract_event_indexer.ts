@@ -1,6 +1,7 @@
 import { Horizon } from '@stellar/stellar-sdk';
 import { PrismaClient } from './generated/prisma/client';
 import { deliverWebhookEvent } from './routes/webhooks';
+import { recordContribution } from './reputation_service';
 
 export class ContractEventIndexer {
   private server: Horizon.Server;
@@ -107,6 +108,16 @@ export class ContractEventIndexer {
           timestamp: stored.timestamp.toISOString(),
           data: stored.data,
         }, groupId).catch(() => {/* non-blocking */});
+      }
+
+      // Update member reputation for contribution events
+      if (webhookEvent === 'contribution.created') {
+        const data = stored.data as any;
+        const memberAddress = data?.member || data?.address;
+        if (memberAddress) {
+          // Treat all indexed contributions as on-time (late detection requires cycle data)
+          recordContribution(String(memberAddress), true).catch(() => {/* non-blocking */});
+        }
       }
     } catch (error) {
       console.error('Error storing event:', error);

@@ -21,6 +21,7 @@ import { metricsMiddleware, metricsHandler } from './metrics';
 import { requestLogger } from './logger';
 import { createRateLimiterMiddleware } from './rate_limiter';
 import { createWebhookRouter } from './routes/webhooks';
+import { getMemberReputation } from './reputation_service';
 
 dotenv.config();
 
@@ -149,6 +150,20 @@ app.use('/api', versionMiddleware);
 app.use('/api/v1', createV1Router(services));
 app.use('/api/v2', createV2Router(services));
 app.use('/api/webhooks', createWebhookRouter());
+
+// ── Member reputation endpoint (Issue #800) ───────────────────────────────────
+app.get('/api/members/:address/reputation', async (req, res) => {
+  const { address } = req.params;
+  if (!address || address.trim().length === 0) {
+    return res.status(400).json({ error: 'address is required' });
+  }
+  try {
+    const reputation = await getMemberReputation(address.trim());
+    return res.json(reputation);
+  } catch {
+    return res.status(500).json({ error: 'Failed to fetch reputation' });
+  }
+});
 
 // ── Legacy unversioned routes (redirect to v1 for backward compatibility) ────
 app.use((req, res, next) => {
