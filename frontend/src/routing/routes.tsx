@@ -26,6 +26,7 @@ const AnalyticsDashboardPage = lazy(() => import("../pages/AnalyticsDashboardPag
 const JoinGroupPage = lazy(() => import("../pages/JoinGroupPage"));
 const JoinViaInvite = lazy(() => import("../pages/JoinViaInvite"));
 const MemberProfilePage = lazy(() => import("../pages/MemberProfilePage"));
+const NotificationSettings = lazy(() => import("../pages/settings/NotificationSettings"));
 /**
  * Centralized route configuration.
  * All application routes are defined here with their properties.
@@ -159,5 +160,12 @@ export const routeConfig: RouteConfig[] = [
     protected: false,
     title: "Member Profile - Stellar Save",
     description: "View a member's contribution history and reputation",
+  },
+  {
+    path: ROUTES.SETTINGS_NOTIFICATIONS,
+    component: NotificationSettings,
+    protected: true,
+    title: "Notification Preferences - Stellar Save",
+    description: "Configure your notification preferences",
   },
 ];

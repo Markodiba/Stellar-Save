@@ -19,8 +19,8 @@ import { ContributionFlow } from '../components/ContributionFlow';
 import { PayoutQueue } from '../components/PayoutQueue';
 import { useNavigation } from '../routing/useNavigation';
 import { useWallet } from '../hooks/useWallet';
-import { useClipboard } from '../hooks/useClipboard';
-import { generateInviteLink } from '../utils/invitation';
+import { usePushNotifications } from '../hooks/usePushNotifications';
+import { ActivityFeed } from '../components/ActivityFeed/ActivityFeed';
 import type { DetailedGroup, GroupMember } from '../utils/groupApi';
 import type { PayoutQueueData } from '../types/contribution';
 
@@ -121,6 +121,10 @@ function MemberManagementDialog({ open, member, onClose, onRemove }: MemberManag
 }
 
 // ── Main Page ────────────────────────────────────────────────────────────────
+import { usePushNotifications } from '../hooks/usePushNotifications';
+import type { DetailedGroup } from '../utils/groupApi';
+import { TriggerPayoutButton } from '../components/TriggerPayoutButton';
+import { useContract } from '../hooks/useContract';
 
 /**
  * Group Detail Page — Issue #441
@@ -128,9 +132,19 @@ function MemberManagementDialog({ open, member, onClose, onRemove }: MemberManag
  * contribute button, member management options, and responsive design.
  */
 export default function GroupDetailPage() {
+  return (
+    <ErrorBoundary>
+      <GroupDetailContent />
+    </ErrorBoundary>
+  );
+}
+
+function GroupDetailContent() {
   const { params } = useNavigation();
   const { activeAddress } = useWallet();
   const groupId = params.groupId ?? 'demo-group';
+
+  const { isCycleComplete } = useContract();
 
   const [group, setGroup] = useState<DetailedGroup | null>(null);
   const [loading, setLoading] = useState(true);
@@ -138,6 +152,7 @@ export default function GroupDetailPage() {
   const [managedMember, setManagedMember] = useState<GroupMember | null>(null);
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [allContributed, setAllContributed] = useState(false);
 
   const { copy, copied } = useClipboard();
 
@@ -147,7 +162,17 @@ export default function GroupDetailPage() {
     // Simulate async fetch with mock data
     setTimeout(() => {
       try {
-        setGroup(buildMockGroup(groupId));
+        const loaded = buildMockGroup(groupId);
+        setGroup(loaded);
+        // Check on-chain whether all contributions for the current cycle are complete.
+        // Fall back to comparing currentAmount vs targetAmount when the contract call fails.
+        const cycleNumber = loaded.currentCycle?.cycleNumber ?? 0;
+        isCycleComplete(BigInt(groupId), cycleNumber)
+          .then((complete) => setAllContributed(complete))
+          .catch(() => {
+            const cycle = loaded.currentCycle;
+            setAllContributed(!!cycle && cycle.currentAmount >= cycle.targetAmount);
+          });
       } catch {
         setError('Failed to load group details');
       } finally {
@@ -245,6 +270,12 @@ export default function GroupDetailPage() {
                   onError={(err) => setError(err.message)}
                 />
               )}
+              {allContributed && group.status === 'active' && (
+                <TriggerPayoutButton
+                  groupId={group.id}
+                  onSuccess={(txHash) => setSuccessMessage(`Payout triggered! TX: ${txHash}`)}
+                />
+              )}
             </Box>
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Tooltip title={copied ? 'Link copied!' : 'Copy invite link'} arrow>
@@ -280,6 +311,14 @@ export default function GroupDetailPage() {
           <Typography variant="h3" sx={{ mb: 2 }}>Payout Schedule</Typography>
           <PayoutQueue data={payoutQueue} maxHeight={400} />
         </AppCard>
+
+        {/* Activity Feed — chronological on-chain events for this group */}
+        <ActivityFeed
+          groupId={BigInt(groupId)}
+          showFilters
+          showRefresh
+          maxHeight="500px"
+        />
       </Stack>
 
       {/* Member Management Dialog */}
