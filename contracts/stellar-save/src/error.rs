@@ -149,6 +149,13 @@ pub enum StellarSaveError {
     /// Error Code: 7001
     DeadlineExtensionExceedsMax = 7001,
 
+    /// The member has already voted to dissolve this group.
+    /// Error Code: 7002
+    AlreadyVotedDissolve = 7002,
+
+    /// The group has already been dissolved.
+    /// Error Code: 7003
+    GroupAlreadyDissolved = 7003,
     /// The member has already voted on the current dispute.
     /// Error Code: 2005
     AlreadyVoted = 2005,
@@ -272,6 +279,13 @@ impl StellarSaveError {
             StellarSaveError::DeadlineExtensionExceedsMax => {
                 "The requested deadline extension exceeds the maximum allowed (7 days), or is zero."
             }
+
+            // Dissolution errors
+            StellarSaveError::AlreadyVotedDissolve => {
+                "You have already voted to dissolve this group."
+            }
+            StellarSaveError::GroupAlreadyDissolved => {
+                "The group has already been dissolved or completed."
             StellarSaveError::AlreadyVoted => {
                 "You have already raised a dispute for this group. Each member may only vote once per dispute round."
             }
@@ -458,8 +472,13 @@ impl ErrorRecoveryStrategy {
             StellarSaveError::DeadlineExtensionExceedsMax => {
                 "Provide an extension between 1 and 604800 seconds (7 days). Split larger extensions across multiple calls."
             }
-            StellarSaveError::AlreadyVoted => {
-                "You have already raised a dispute for this group. Wait for the current dispute to be resolved before voting again."
+
+            // Dissolution errors - recovery strategies
+            StellarSaveError::AlreadyVotedDissolve => {
+                "Each member can only vote once to dissolve a group."
+            }
+            StellarSaveError::GroupAlreadyDissolved => {
+                "The group is already in a terminal state and cannot be dissolved again."
             }
         }
     }
