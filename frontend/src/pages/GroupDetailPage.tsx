@@ -128,6 +128,14 @@ function MemberManagementDialog({ open, member, onClose, onRemove }: MemberManag
  * contribute button, member management options, and responsive design.
  */
 export default function GroupDetailPage() {
+  return (
+    <ErrorBoundary>
+      <GroupDetailContent />
+    </ErrorBoundary>
+  );
+}
+
+function GroupDetailContent() {
   const { params } = useNavigation();
   const { activeAddress } = useWallet();
   const groupId = params.groupId ?? 'demo-group';
