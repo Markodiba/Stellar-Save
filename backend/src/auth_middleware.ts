@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
+import { config } from './config';
 
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'super-secret-admin-key';
+const ADMIN_SECRET = config.admin.secret;
 
 export interface AuthenticatedRequest extends Request {
   adminId?: string;

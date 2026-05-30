@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+import { config } from './config'; // validates env vars at startup — must be first
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import { makeExecutableSchema } from '@graphql-tools/schema';
@@ -18,8 +18,6 @@ import { createV1Router } from './routes/v1';
 import { createV2Router } from './routes/v2';
 import { metricsMiddleware, metricsHandler } from './metrics';
 import { requestLogger } from './logger';
-
-dotenv.config();
 
 const app = express();
 app.use(cors());
@@ -52,7 +50,7 @@ apolloServer.start().then(() => {
   }));
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = config.port;
 
 // ── Mock Data ────────────────────────────────────────────────────────────────
 const mockGroups: Group[] = [
@@ -77,12 +75,12 @@ const backupService = new BackupService(s3Client);
 const backupScheduler = new BackupScheduler(backupService);
 const recoveryService = new RecoveryService(backupService, s3Client);
 const backupMonitor = new BackupMonitor(backupService, {
-  alertWebhookUrl: process.env.BACKUP_ALERT_WEBHOOK_URL,
+  alertWebhookUrl: config.backup.alertWebhookUrl,
 });
 
 const adminService = new AdminService();
 
-if (process.env.BACKUP_ENABLED === 'true') {
+if (config.backup.enabled) {
   backupScheduler.start();
   backupMonitor.start();
 }

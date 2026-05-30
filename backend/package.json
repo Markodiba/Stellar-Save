@@ -22,7 +22,8 @@
     "express": "^5.2.1",
     "graphql": "^16.10.0",
     "graphql-depth-limit": "^1.1.0",
-    "stellar-sdk": "^13.3.0"
+    "stellar-sdk": "^13.3.0",
+    "zod": "3.24.2"
   },
   "devDependencies": {
     "@types/graphql-depth-limit": "^1.1.5",
