@@ -3294,15 +3294,10 @@ impl StellarSaveContract {
             .get(&group_key)
             .ok_or(StellarSaveError::GroupNotFound)?;
 
-        // Check group status is Pending (joinable)
-        let status_key = StorageKeyBuilder::group_status(group_id);
-        let status: GroupStatus = env
-            .storage()
-            .persistent()
-            .get(&status_key)
-            .unwrap_or(GroupStatus::Pending);
-
-        if status != GroupStatus::Pending {
+        // Gas opt: read status from the already-loaded Group struct (0 extra SLOADs).
+        // Previously this did a separate SLOAD via status_key; group.status holds
+        // the same value and was already fetched above.
+        if group.status != GroupStatus::Pending {
             return Err(StellarSaveError::InvalidState);
         }
 
@@ -3835,17 +3830,15 @@ impl StellarSaveContract {
         }
 
         // ── Step 5: Reentrancy guard using temporary storage ──────────────────
-        // Gas opt: temporary storage is cheaper than persistent for short-lived
-        // flags. The guard is automatically cleared at the end of the transaction
-        // so we only need to set it, not explicitly release it.
-        // We still release it explicitly for clarity and to match the original
-        // contract semantics.
+        // Gas opt: temporary storage is ~10x cheaper than persistent for
+        // short-lived flags. The guard is automatically cleared at ledger close
+        // so we only need to set it once per transaction.
         let reentrancy_key = StorageKeyBuilder::reentrancy_guard();
-        let guard_value: u64 = env.storage().persistent().get(&reentrancy_key).unwrap_or(0);
+        let guard_value: u64 = env.storage().temporary().get(&reentrancy_key).unwrap_or(0);
         if guard_value != 0 {
             return Err(StellarSaveError::InternalError);
         }
-        env.storage().persistent().set(&reentrancy_key, &1u64);
+        env.storage().temporary().set(&reentrancy_key, &1u64);
 
         // ── Step 6: Load TokenConfig (1 SLOAD) ────────────────────────────────
         let token_config_key = StorageKeyBuilder::group_token_config(group_id);
@@ -3855,7 +3848,7 @@ impl StellarSaveContract {
             .get(&token_config_key)
             .ok_or_else(|| {
                 // Release reentrancy guard before returning error
-                env.storage().persistent().set(&reentrancy_key, &0u64);
+                env.storage().temporary().set(&reentrancy_key, &0u64);
                 StellarSaveError::GroupNotFound
             })?;
 
@@ -3877,7 +3870,7 @@ impl StellarSaveContract {
         let current_cycle = group.current_cycle;
 
         // Release reentrancy guard before storage ops (safe from re-entrancy now)
-        env.storage().persistent().set(&reentrancy_key, &0u64);
+        env.storage().temporary().set(&reentrancy_key, &0u64);
 
         // Gas opt: record_contribution now returns the new cycle_total so we
         // can pass it directly to the event emitter without an extra SLOAD.
