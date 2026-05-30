@@ -3,6 +3,7 @@ import { buildRoute } from '../routing/constants';
 import './GroupCard.css';
 import { Button } from './Button';
 import { GroupBadge } from './GroupBadge';
+import { usePrefetchGroup } from '../hooks/useGroup';
 
 interface GroupCardProps {
   groupId?: string;
@@ -34,6 +35,12 @@ export function GroupCard({
   className = '',
 }: GroupCardProps) {
   const classes = ['group-card', className].filter(Boolean).join(' ');
+  const prefetchGroup = usePrefetchGroup();
+
+  // Prefetch group detail data on hover so navigation feels instant
+  const handleMouseEnter = () => {
+    if (groupId) prefetchGroup(groupId);
+  };
 
   const handleCardClick = (e: React.MouseEvent) => {
     // Prevent card click when clicking buttons
@@ -113,6 +120,7 @@ export function GroupCard({
         className={classes}
         style={{ textDecoration: 'none', color: 'inherit' }}
         onClick={handleCardClick}
+        onMouseEnter={handleMouseEnter}
       >
         {cardContent}
       </Link>
@@ -121,7 +129,7 @@ export function GroupCard({
 
   // Otherwise, render as div
   return (
-    <div className={classes} onClick={handleCardClick}>
+    <div className={classes} onClick={handleCardClick} onMouseEnter={handleMouseEnter}>
       {cardContent}
     </div>
   );
