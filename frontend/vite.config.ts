@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { imagetools } from 'vite-imagetools'
 
 const CSP = [
   "default-src 'self'",
