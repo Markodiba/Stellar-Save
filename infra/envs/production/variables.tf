@@ -11,30 +11,32 @@ variable "acm_certificate_arn" {
   type        = string
 }
 
-variable "vpc_id" {
-  description = "VPC ID for RDS deployment"
-  type        = string
+variable "app_log_retention_days" {
+  description = "CloudWatch Logs retention period for application logs (days)"
+  type        = number
+  default     = 30
 }
 
-variable "private_subnet_ids" {
-  description = "Private subnet IDs for the RDS subnet group"
-  type        = list(string)
+variable "audit_log_retention_days" {
+  description = "CloudWatch Logs retention period for audit logs (days)"
+  type        = number
+  default     = 90
 }
 
-variable "backend_security_group_ids" {
-  description = "Security group IDs of backend services allowed to connect to RDS"
-  type        = list(string)
-  default     = []
+variable "create_cloudwatch_alarms" {
+  description = "Whether to create CloudWatch alarms for error monitoring"
+  type        = bool
+  default     = true
 }
 
-variable "db_username" {
-  description = "Master DB username"
-  type        = string
-  sensitive   = true
+variable "critical_error_alarm_threshold" {
+  description = "Threshold for triggering critical error alarms"
+  type        = number
+  default     = 1
 }
 
-variable "db_password" {
-  description = "Master DB password"
-  type        = string
-  sensitive   = true
+variable "create_lambda_role" {
+  description = "Whether to create Lambda execution role for CloudWatch logging"
+  type        = bool
+  default     = false
 }
