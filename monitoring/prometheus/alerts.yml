@@ -158,3 +158,44 @@ groups:
       annotations:
         summary: "Stellar mainnet fees > 10 XLM in 1 hour"
         description: "{{ $value | humanize }} XLM in fees last hour. Check for runaway transactions."
+
+    # ── AWS cost spikes ───────────────────────────────────────────────────────
+    - alert: AwsCostSpikeDetected
+      expr: |
+        increase(aws_cost_spike_total{app="stellar-save-backend"}[1h]) > 0
+      for: 0m
+      labels:
+        severity: warning
+      annotations:
+        summary: "AWS cost spike detected for {{ $labels.service }}"
+        description: "Service {{ $labels.service }} spend increased >20% since last check."
+
+    - alert: AwsServiceCostHigh
+      expr: |
+        aws_cost_by_service_usd{app="stellar-save-backend"} > 20
+      for: 0m
+      labels:
+        severity: warning
+      annotations:
+        summary: "AWS service {{ $labels.service }} cost > $20/month"
+        description: "{{ $labels.service }} is costing ${{ $value | humanize }}/month. Review usage."
+
+    - alert: AwsMonthlyCostForecastHigh
+      expr: |
+        aws_cost_forecast_usd{app="stellar-save-backend"} > 50
+      for: 0m
+      labels:
+        severity: warning
+      annotations:
+        summary: "AWS monthly cost forecast > $50"
+        description: "Forecasted AWS spend this month: ${{ $value | humanize }}. Check Cost Explorer."
+
+    - alert: AwsOptimizationSavingsAvailable
+      expr: |
+        sum(aws_optimization_savings_usd{app="stellar-save-backend"}) > 10
+      for: 0m
+      labels:
+        severity: info
+      annotations:
+        summary: "Compute Optimizer: ${{ $value | humanize }} savings available"
+        description: "Right-sizing recommendations could save ${{ $value | humanize }}/month. Review /api/v1/costs/report."
