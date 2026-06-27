@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Box, CircularProgress } from "@mui/material";
+import { useDeepLink } from "./hooks/useDeepLink";
 import "./App.css";
 
 const AppRouter = lazy(() =>
@@ -22,6 +23,9 @@ function RouteLoadingFallback() {
 }
 
 export default function App() {
+  // Initialize deep link handler
+  useDeepLink();
+
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
       <AppRouter />
