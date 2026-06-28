@@ -240,6 +240,8 @@ model IndexedTransaction {
   @@index([ledgerSeq])
   @@index([sourceAccount])
   @@index([createdAt])
+}
+
 // ========== WEB PUSH SUBSCRIPTION MODELS ==========
 
 model PushSubscription {
@@ -351,75 +353,72 @@ model MemberReputation {
   @@index([score])
 }
 
-// ========== FIAT RAMP MODELS (Issue #1023) ==========
+// ========== MOBILE DEVICE TOKEN MODELS (Issue #1027) ==========
 
-model RampTransaction {
-  id             String   @id @default(cuid())
-  userId         String
-  type           String   // 'deposit' | 'withdraw'
-  anchorDomain   String
-  stellarAccount String
-  assetCode      String
-  assetIssuer    String?
-  amount         String?
-  anchorId       String?  // anchor's transaction id
-  status         String   @default("pending_user_transfer_start")
-  interactiveUrl String?
-  moreInfoUrl    String?
-  startedAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+model MobileDeviceToken {
+  id          String    @id @default(cuid())
+  userId      String
+  token       String    @unique
+  platform    String    // 'ios' | 'android'
+  isValid     Boolean   @default(true)
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([userId])
-  @@index([status])
-  @@index([anchorId])
+  @@index([token])
+  @@index([isValid])
 }
 
-// ========== KYC MODELS (Issue #1024) ==========
+// ========== FRAUD DETECTION MODELS (Issue #1028) ==========
 
-model KycRecord {
-  id             String    @id @default(cuid())
-  userId         String    @unique
-  walletAddress  String
-  status         String    @default("pending") // pending, approved, rejected, expired
-  kycProviderId  String?
-  submittedAt    DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  reviewedAt     DateTime?
+model FraudFlag {
+  id          String    @id @default(cuid())
+  entityType  String    // 'account' | 'group'
+  entityId    String
+  riskScore   Float
+  reasons     String[]
+  status      String    @default("pending") // pending | reviewed | dismissed
+  evidence    Json
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  @@index([userId])
+  @@index([entityType, entityId])
   @@index([status])
-}
-
-model KycStatusEvent {
-  id         String   @id @default(cuid())
-  userId     String
-  oldStatus  String
-  newStatus  String
-  createdAt  DateTime @default(now())
-
-  @@index([userId])
   @@index([createdAt])
 }
 
-// ========== CROSS-BORDER PAYMENT MODELS (Issue #1025) ==========
+// ========== API KEY MODELS (Issue #1030) ==========
 
-model CrossBorderPayment {
-  id               String   @id @default(cuid())
-  groupId          String?
-  anchorDomain     String
-  sendAssetCode    String
-  receiveAssetCode String
-  amount           String
-  senderId         String
-  receiverId       String
-  anchorTxId       String?  @unique
-  status           String   @default("pending") // pending, completed, error, refunded
-  stellarAccount   String?
-  stellarMemo      String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+model ApiKey {
+  id          String    @id @default(cuid())
+  keyHash     String    @unique
+  keyPrefix   String
+  userId      String
+  name        String
+  tier        String    @default("free")
+  rateLimit   Int       @default(100)
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  @@index([groupId])
-  @@index([status])
-  @@index([anchorTxId])
+  @@index([userId])
+  @@index([keyHash])
+  @@index([isActive])
+}
+
+model ApiKeyUsage {
+  id         String   @id @default(cuid())
+  keyId      String
+  endpoint   String
+  method     String
+  statusCode Int
+  createdAt  DateTime @default(now())
+
+  @@index([keyId])
+  @@index([createdAt])
 }

@@ -15,6 +15,10 @@ import { FeedbackService } from '../feedback_service';
 import { createAnalyticsMiddlewareStack, createAnalyticsCacheMiddleware } from '../analytics_middleware';
 import { Group, UserInteraction, UserPreference } from '../models';
 import { createNotificationRouter } from './notifications';
+import { adminAuthMiddleware } from '../auth_middleware';
+import { fraudDetectionService } from '../fraud_detection_service';
+import { apiKeyService } from '../api_key_service';
+import { apiKeyAuthMiddleware, recordApiUsage } from '../api_key_rate_limiter';
 
 // ── Shared service instances (passed in from app) ────────────────────────────
 export interface V1Services {
@@ -548,50 +552,115 @@ export function createV1Router(services: V1Services): Router {
     csvStream.end();
   });
 
-  // ── Feedback (Issue #1133) ───────────────────────────────────────────────────
-  // POST /feedback — submit feedback from any page
-  router.post('/feedback', async (req, res) => {
+  // ── Admin Fraud Detection (Issue #1028) ──────────────────────────────────
+  router.get('/admin/fraud/flags', adminAuthMiddleware, async (req, res) => {
+    const { status } = req.query;
     try {
-      const { userId, category, message, page } = req.body;
-      const userAgent = req.headers['user-agent'];
-      const item = await feedbackService.submit({ userId, category, message, page, userAgent });
-      res.status(201).json(item);
-    } catch (err: any) {
-      res.status(400).json({ error: err.message ?? 'Failed to submit feedback' });
+      const flags = await fraudDetectionService.getFlags(status as string | undefined);
+      res.json({ flags });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch fraud flags' });
     }
   });
 
-  // GET /feedback — admin: list feedback with optional filters
-  router.get('/feedback', async (req, res) => {
-    const { category, status, limit, offset } = req.query;
-    const items = await feedbackService.list({
-      category: category as string,
-      status: status as string,
-      limit: limit ? parseInt(limit as string) : 50,
-      offset: offset ? parseInt(offset as string) : 0,
-    });
-    res.json({ count: items.length, items });
-  });
-
-  // POST /feedback/:id/vote — upvote a feedback item
-  router.post('/feedback/:id/vote', async (req, res) => {
+  router.patch('/admin/fraud/flags/:id', adminAuthMiddleware, async (req: any, res) => {
+    const { id } = req.params;
+    const { status } = req.body as { status?: string };
+    if (!status) return res.status(400).json({ error: 'status is required' });
     try {
-      const item = await feedbackService.vote(req.params.id);
-      res.json(item);
-    } catch {
-      res.status(404).json({ error: 'Feedback not found' });
+      const flag = await fraudDetectionService.reviewFlag(id, status, req.adminId || 'admin');
+      res.json({ flag });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update fraud flag' });
     }
   });
 
-  // PATCH /feedback/:id/respond — team response + optional status change
-  router.patch('/feedback/:id/respond', async (req, res) => {
+  router.post('/admin/fraud/scan', adminAuthMiddleware, async (_req, res) => {
     try {
-      const { response, status } = req.body;
-      if (!response) return res.status(400).json({ error: 'response is required' });
-      const item = await feedbackService.respond(req.params.id, response, status);
-      res.json(item);
-    } catch {
-      res.status(404).json({ error: 'Feedback not found' });
+      const results = await fraudDetectionService.runScan();
+      res.json({ flagged: results.length, results });
+    } catch (error) {
+      res.status(500).json({ error: 'Fraud scan failed' });
+    }
+  });
+
+  // ── API Key Management (Issue #1030) ──────────────────────────────────────
+
+  // POST /api/v1/api-keys — Create a new API key
+  router.post('/api-keys', async (req: any, res: any) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+      const { key, info } = await apiKeyService.generateKey(userId, req.body.name || 'API Key', req.body.tier || 'free');
+      res.status(201).json({ key, info: { ...info, keyPrefix: info.keyPrefix } });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to generate API key' });
+    }
+  });
+
+  // GET /api/v1/api-keys — List API keys for authenticated user
+  router.get('/api-keys', apiKeyAuthMiddleware, async (req: any, res: any) => {
+    try {
+      const keys = await apiKeyService.getKeysForUser(req.apiKey.userId);
+      res.json({ keys });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch API keys' });
+    }
+  });
+
+  // DELETE /api/v1/api-keys/:keyId — Revoke an API key
+  router.delete('/api-keys/:keyId', apiKeyAuthMiddleware, async (req: any, res: any) => {
+    try {
+      const { keyId } = req.params;
+      await apiKeyService.revokeKey(keyId);
+      res.json({ message: 'API key revoked' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to revoke API key' });
+    }
+  });
+
+  // GET /api/v1/api-keys/:keyId/usage — Get usage stats for a key
+  router.get('/api-keys/:keyId/usage', apiKeyAuthMiddleware, async (req: any, res: any) => {
+    try {
+      const { keyId } = req.params;
+      const stats = await apiKeyService.getUsageStats(keyId, parseInt(req.query.hours as string) || 24);
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch usage stats' });
+    }
+  });
+
+  // ── Public API Endpoints (Issue #1030) ────────────────────────────────────
+
+  // GET /api/v1/public/groups — Public list of groups
+  router.get('/public/groups', apiKeyAuthMiddleware, async (req: any, res: any) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const groups = await (eventIndexer as any).prisma.contractEvent.findMany({
+        where: { eventType: 'GroupCreated' },
+        orderBy: { timestamp: 'desc' },
+        take: limit,
+        skip: offset,
+      });
+
+      await recordApiUsage(req, res);
+      res.json({ count: groups.length, limit, offset, groups });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch groups' });
+    }
+  });
+
+  // GET /api/v1/public/stats — Public platform statistics
+  router.get('/public/stats', apiKeyAuthMiddleware, async (req: any, res: any) => {
+    try {
+      const stats = await analyticsService.getGroupsOverviewStats();
+      await recordApiUsage(req, res);
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch statistics' });
     }
   });
 
