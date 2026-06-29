@@ -46,6 +46,8 @@ import { AuditEventLog, auditMiddleware, createAuditRouter } from './audit_event
 import { initWebSocketGateway } from './ws_gateway';
 import { initReconciliationService } from './reconciliation_service';
 import docsRouter from './docs';
+import { IpfsClient, PinningService, GroupMetadataCache, IpfsMonitor } from './ipfs';
+import { createIpfsRouter } from './routes/ipfs';
 
 const CSP_POLICY = [
   "default-src 'self'",
@@ -150,6 +152,24 @@ apolloServer.start().then(() => {
 
 const PORT = config.port;
 
+// ── IPFS Services ────────────────────────────────────────────────────────────
+let ipfsClient: IpfsClient | undefined;
+let pinningService: PinningService | undefined;
+let metadataCache: GroupMetadataCache | undefined;
+let ipfsMonitor: IpfsMonitor | undefined;
+
+if (config.ipfs.enabled) {
+  ipfsClient = new IpfsClient(config.ipfs.apiUrl, config.ipfs.apiTimeoutMs);
+  pinningService = new PinningService(ipfsClient);
+  metadataCache = new GroupMetadataCache(ipfsClient, pinningService);
+  ipfsMonitor = new IpfsMonitor(ipfsClient, pinningService, config.ipfs.monitorIntervalMs);
+
+  pinningService.start();
+  ipfsMonitor.start();
+
+  console.log(`  IPFS:       ${config.ipfs.apiUrl} (pinning enabled)`);
+}
+
 // ── Services ─────────────────────────────────────────────────────────────────
 import { mockGroups, mockInteractions } from './mock_data';
 const engine = new RecommendationEngine(mockGroups, mockInteractions);
@@ -229,6 +249,15 @@ app.use('/api/v2', createV2Router(services));
 app.use('/api/webhooks', createWebhookRouter());
 app.use('/api/v1/costs', createCostRouter());
 app.use('/api/v1/rate-limits', createQuotaReporterRouter());
+
+// ── IPFS routes ──────────────────────────────────────────────────────────────
+if (ipfsClient && pinningService && metadataCache && ipfsMonitor) {
+  app.use(
+    '/api/v1/ipfs',
+    createIpfsRouter(ipfsClient, pinningService, metadataCache, ipfsMonitor),
+  );
+  console.log(`  IPFS API:   http://localhost:${PORT}/api/v1/ipfs`);
+}
 
 // ── Member reputation endpoint (Issue #800) ───────────────────────────────────
 app.get('/api/members/:address/reputation', async (req, res) => {
